@@ -11,6 +11,7 @@
 ;;; Packages
 
 (use-package! sh-script ; built-in
+  :mode ("\\.bats\\'" . sh-mode)
   :mode ("\\.\\(?:zunit\\|env\\)\\'" . sh-mode)
   :mode ("/bspwmrc\\'" . sh-mode)
   :config
@@ -77,7 +78,9 @@
   :after sh-script
   :config
   (set-company-backend! 'sh-mode '(company-shell company-files))
-  (setq company-shell-delete-duplicates t))
+  (setq company-shell-delete-duplicates t
+        ;; whatis lookups are exceptionally slow on macOS (#5860)
+        company-shell-dont-fetch-meta IS-MAC))
 
 (use-package! fish-mode
   :when (featurep! +fish)

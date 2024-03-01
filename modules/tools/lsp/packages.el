@@ -2,10 +2,15 @@
 ;;; tools/lsp/packages.el
 
 (if (featurep! +eglot)
-    (package! eglot :pin "a5b7b7d933b97db9ce5f8b7dcc8c866f7c35b220")
-  (package! lsp-mode :pin "aec8968364fce476f41e532bc083a96b6d9cb1ce")
-  (package! lsp-ui :pin "cb02972b20706d18d137841c83d3765bcb280687")
+    (progn
+      (package! eglot :pin "dade5a148712463a15b7ac65f779e25596a3eefc")
+      (when (featurep! :completion vertico)
+        (package! consult-eglot :pin "f93c571dc392a8b11d35541bffde30bd9f411d30")))
+  (package! lsp-mode :pin "f49ea4e36528a23ae988b136d1b1e9a5f8651f04")
+  (package! lsp-ui :pin "21ce926eedd41ef305c2d89412506ce59b1a7eac")
   (when (featurep! :completion ivy)
-    (package! lsp-ivy :pin "bccd86028e669f5a1cad78364775fe7a0741ff93"))
+    (package! lsp-ivy :pin "3e87441a625d65ced5a208a0b0442d573596ffa3"))
   (when (featurep! :completion helm)
-    (package! helm-lsp :pin "c2c6974dadfac459b1a69a1217441283874cea92")))
+    (package! helm-lsp :pin "c2c6974dadfac459b1a69a1217441283874cea92"))
+  (when (featurep! :completion vertico)
+    (package! consult-lsp :pin "f4f195046b97be5ce0406e0723921b3393d9442e")))

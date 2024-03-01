@@ -18,11 +18,11 @@
       (add-hook 'kill-buffer-hook #'+pdf-cleanup-windows-h nil t)))
 
   :config
-  (defadvice! +pdf--install-epdfinfo-a (orig-fn &rest args)
+  (defadvice! +pdf--install-epdfinfo-a (fn &rest args)
     "Install epdfinfo after the first PDF file, if needed."
     :around #'pdf-view-mode
     (if (file-executable-p pdf-info-epdfinfo-program)
-        (apply orig-fn args)
+        (apply fn args)
       ;; If we remain in pdf-view-mode, it'll spit out cryptic errors. This
       ;; graceful failure is better UX.
       (fundamental-mode)
@@ -41,6 +41,7 @@
   ;; Handle PDF-tools related popups better
   (set-popup-rules!
     '(("^\\*Outline*" :side right :size 40 :select nil)
+      ("^\\*Edit Annotation " :quit nil)
       ("\\(?:^\\*Contents\\|'s annots\\*$\\)" :ignore t)))
 
   ;; The mode-line does serve any useful purpose is annotation windows
@@ -73,10 +74,10 @@
                          nil 'local))))))
 
   ;; Silence "File *.pdf is large (X MiB), really open?" prompts for pdfs
-  (defadvice! +pdf-suppress-large-file-prompts-a (orig-fn size op-type filename &optional offer-raw)
+  (defadvice! +pdf-suppress-large-file-prompts-a (fn size op-type filename &optional offer-raw)
     :around #'abort-if-file-too-large
     (unless (string-match-p "\\.pdf\\'" filename)
-      (funcall orig-fn size op-type filename offer-raw))))
+      (funcall fn size op-type filename offer-raw))))
 
 
 (use-package! saveplace-pdf-view

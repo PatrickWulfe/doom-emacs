@@ -1,8 +1,13 @@
 ;; -*- no-byte-compile: t; -*-
 ;;; tools/biblio/packages.el
 
-(package! bibtex-completion :pin "9f6ea920a49457d85096caa0e61f086a42b2908e")
 (when (featurep! :completion ivy)
-  (package! ivy-bibtex :pin "9f6ea920a49457d85096caa0e61f086a42b2908e"))
+  (package! bibtex-completion :pin "aa775340ba691d2322948bfdc6a88158568a1399")
+  (package! ivy-bibtex :pin "aa775340ba691d2322948bfdc6a88158568a1399"))
 (when (featurep! :completion helm)
-  (package! helm-bibtex :pin "9f6ea920a49457d85096caa0e61f086a42b2908e"))
+  (package! bibtex-completion :pin "aa775340ba691d2322948bfdc6a88158568a1399")
+  (package! helm-bibtex :pin "aa775340ba691d2322948bfdc6a88158568a1399"))
+(when (featurep! :completion vertico)
+  (package! citar :pin "b24b5b94b7d5f6e7e96331b48a22e977e0013de1"))
+
+(package! citeproc :pin "9f783967c1909cc741a691ee4e4021a952ffc4e1")

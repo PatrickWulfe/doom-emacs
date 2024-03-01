@@ -7,12 +7,6 @@
   "The backends to prepend to `company-backends' in `lsp-mode' buffers.
 Can be a list of backends; accepts any value `company-backends' accepts.")
 
-(defvar +lsp-prompt-to-install-server t
-  "If non-nil, prompt to install a server if no server is present.
-
-If set to `quiet', suppress the install prompt and don't visibly inform the user
-about it (it will be logged to *Messages* however).")
-
 
 ;;
 ;;; Packages
@@ -21,7 +15,7 @@ about it (it will be logged to *Messages* however).")
   :commands lsp-install-server
   :init
   ;; Don't touch ~/.emacs.d, which could be purged without warning
-  (setq lsp-session-file (concat doom-etc-dir "lsp-session")
+  (setq lsp-session-file (concat doom-cache-dir "lsp-session")
         lsp-server-install-dir (concat doom-etc-dir "lsp"))
   ;; Don't auto-kill LSP server after last workspace buffer is killed, because I
   ;; will do it for you, after `+lsp-defer-shutdown' seconds.
@@ -55,7 +49,17 @@ about it (it will be logged to *Messages* however).")
         lsp-xml-jar-file (expand-file-name "org.eclipse.lsp4xml-0.3.0-uber.jar" lsp-server-install-dir)
         lsp-groovy-server-file (expand-file-name "groovy-language-server-all.jar" lsp-server-install-dir))
 
-  (set-popup-rule! "^\\*lsp-help" :size 0.35 :quit t :select t)
+  ;; REVIEW Remove this once this is fixed upstream.
+  (add-to-list 'lsp-client-packages 'lsp-racket)
+
+  (add-hook! 'doom-escape-hook
+    (defun +lsp-signature-stop-maybe-h ()
+      "Close the displayed `lsp-signature'."
+      (when lsp-signature-mode
+        (lsp-signature-stop)
+        t)))
+
+  (set-popup-rule! "^\\*lsp-\\(help\\|install\\)" :size 0.35 :quit t :select t)
   (set-lookup-handlers! 'lsp-mode
     :definition #'+lsp-lookup-definition-handler
     :references #'+lsp-lookup-references-handler
@@ -63,14 +67,14 @@ about it (it will be logged to *Messages* however).")
     :implementations '(lsp-find-implementation :async t)
     :type-definition #'lsp-find-type-definition)
 
-  (defadvice! +lsp--respect-user-defined-checkers-a (orig-fn &rest args)
+  (defadvice! +lsp--respect-user-defined-checkers-a (fn &rest args)
     "Ensure user-defined `flycheck-checker' isn't overwritten by `lsp'."
     :around #'lsp-diagnostics-flycheck-enable
     (if flycheck-checker
         (let ((old-checker flycheck-checker))
-          (apply orig-fn args)
+          (apply fn args)
           (setq-local flycheck-checker old-checker))
-      (apply orig-fn args)))
+      (apply fn args)))
 
   (add-hook! 'lsp-mode-hook
     (defun +lsp-display-guessed-project-root-h ()
@@ -82,16 +86,17 @@ about it (it will be logged to *Messages* however).")
           (lsp--info "Could not guess project root."))))
     #'+lsp-optimization-mode)
 
-  (add-hook! 'lsp-completion-mode-hook
-    (defun +lsp-init-company-backends-h ()
-      (when lsp-completion-mode
-        (set (make-local-variable 'company-backends)
-             (cons +lsp-company-backends
-                   (remove +lsp-company-backends
-                           (remq 'company-capf company-backends)))))))
+  (when (featurep! :completion company)
+    (add-hook! 'lsp-completion-mode-hook
+      (defun +lsp-init-company-backends-h ()
+        (when lsp-completion-mode
+          (set (make-local-variable 'company-backends)
+               (cons +lsp-company-backends
+                     (remove +lsp-company-backends
+                             (remq 'company-capf company-backends))))))))
 
   (defvar +lsp--deferred-shutdown-timer nil)
-  (defadvice! +lsp-defer-server-shutdown-a (orig-fn &optional restart)
+  (defadvice! +lsp-defer-server-shutdown-a (fn &optional restart)
     "Defer server shutdown for a few seconds.
 This gives the user a chance to open other project files before the server is
 auto-killed (which is a potentially expensive process). It also prevents the
@@ -101,7 +106,7 @@ server getting expensively restarted when reverting buffers."
             restart
             (null +lsp-defer-shutdown)
             (= +lsp-defer-shutdown 0))
-        (prog1 (funcall orig-fn restart)
+        (prog1 (funcall fn restart)
           (+lsp-optimization-mode -1))
       (when (timerp +lsp--deferred-shutdown-timer)
         (cancel-timer +lsp--deferred-shutdown-timer))
@@ -112,26 +117,9 @@ server getting expensively restarted when reverting buffers."
                    (with-lsp-workspace workspace
                      (unless (lsp--workspace-buffers workspace)
                        (let ((lsp-restart 'ignore))
-                         (funcall orig-fn))
+                         (funcall fn))
                        (+lsp-optimization-mode -1))))
              lsp--cur-workspace))))
-
-  (defadvice! +lsp-dont-prompt-to-install-servers-maybe-a (orig-fn &rest args)
-    :around #'lsp
-    (when (buffer-file-name)
-      (require 'lsp-mode)
-      (lsp--require-packages)
-      (if (or (lsp--filter-clients
-               (-andfn #'lsp--matching-clients?
-                       #'lsp--server-binary-present?))
-              (not (memq +lsp-prompt-to-install-server '(nil quiet))))
-          (apply orig-fn args)
-        ;; HACK `lsp--message' overrides `inhibit-message', so use `quiet!'
-        (let ((doom-debug-p
-               (or doom-debug-p
-                   (not (eq +lsp-prompt-to-install-server 'quiet)))))
-          (doom-shut-up-a #'lsp--info "No language server available for %S"
-                          major-mode)))))
 
   (when (featurep! :ui modeline +light)
     (defvar-local lsp-modeline-icon nil)
@@ -158,12 +146,12 @@ server getting expensively restarted when reverting buffers."
 (use-package! lsp-ui
   :hook (lsp-mode . lsp-ui-mode)
   :init
-  (defadvice! +lsp--use-hook-instead-a (orig-fn &rest args)
+  (defadvice! +lsp--use-hook-instead-a (fn &rest args)
     "Change `lsp--auto-configure' to not force `lsp-ui-mode' on us. Using a hook
 instead is more sensible."
     :around #'lsp--auto-configure
     (letf! ((#'lsp-ui-mode #'ignore))
-      (apply orig-fn args)))
+      (apply fn args)))
 
   :config
   (when (featurep! +peek)
@@ -175,7 +163,8 @@ instead is more sensible."
 
   (setq lsp-ui-peek-enable (featurep! +peek)
         lsp-ui-doc-max-height 8
-        lsp-ui-doc-max-width 35
+        lsp-ui-doc-max-width 72         ; 150 (default) is too wide
+        lsp-ui-doc-delay 0.75           ; 0.2 (default) is too naggy
         lsp-ui-doc-show-with-mouse nil  ; don't disappear on mouseover
         lsp-ui-doc-position 'at-point
         lsp-ui-sideline-ignore-duplicate t
@@ -185,10 +174,7 @@ instead is more sensible."
         lsp-ui-sideline-show-hover nil
         ;; Re-enable icon scaling (it's disabled by default upstream for Emacs
         ;; 26.x compatibility; see emacs-lsp/lsp-ui#573)
-        lsp-ui-sideline-actions-icon lsp-ui-sideline-actions-icon-default
-        ;; REVIEW Temporarily disabled, due to immense slowness on every
-        ;;        keypress. See emacs-lsp/lsp-ui#613
-        lsp-ui-doc-enable nil)
+        lsp-ui-sideline-actions-icon lsp-ui-sideline-actions-icon-default)
 
   (map! :map lsp-ui-peek-mode-map
         "j"   #'lsp-ui-peek--select-next
@@ -205,3 +191,10 @@ instead is more sensible."
 (use-package! lsp-ivy
   :when (featurep! :completion ivy)
   :commands lsp-ivy-workspace-symbol lsp-ivy-global-workspace-symbol)
+
+
+(use-package! consult-lsp
+  :defer t
+  :when (featurep! :completion vertico)
+  :init
+  (map! :map lsp-mode-map [remap xref-find-apropos] #'consult-lsp-symbols))

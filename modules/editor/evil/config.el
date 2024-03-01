@@ -134,9 +134,9 @@ directives. By default, this only recognizes C directives.")
 
   ;; HACK '=' moves the cursor to the beginning of selection. Disable this,
   ;;      since it's more disruptive than helpful.
-  (defadvice! +evil--dont-move-cursor-a (orig-fn &rest args)
+  (defadvice! +evil--dont-move-cursor-a (fn &rest args)
     :around #'evil-indent
-    (save-excursion (apply orig-fn args)))
+    (save-excursion (apply fn args)))
 
   ;; REVIEW In evil, registers 2-9 are buffer-local. In vim, they're global,
   ;;        so... Perhaps this should be PRed upstream?
@@ -166,11 +166,11 @@ directives. By default, this only recognizes C directives.")
 
   ;; Prevent gw (`evil-fill') and gq (`evil-fill-and-move') from squeezing
   ;; spaces. It doesn't in vim, so it shouldn't in evil.
-  (defadvice! +evil--no-squeeze-on-fill-a (orig-fn &rest args)
+  (defadvice! +evil--no-squeeze-on-fill-a (fn &rest args)
     :around '(evil-fill evil-fill-and-move)
     (letf! (defun fill-region (from to &optional justify nosqueeze to-eop)
              (funcall fill-region from to justify t to-eop))
-      (apply orig-fn args)))
+      (apply fn args)))
 
   ;; Make ESC (from normal mode) the universal escaper. See `doom-escape-hook'.
   (advice-add #'evil-force-normal-state :after #'+evil-escape-a)
@@ -277,6 +277,18 @@ directives. By default, this only recognizes C directives.")
     (embrace-add-pair ?$ "${" "}"))
 
   (defun +evil-embrace-latex-mode-hook-h ()
+    (dolist (pair '((?\' . ("`" . "\'"))
+                    (?\" . ("``" . "\'\'"))))
+      (delete (car pair) evil-embrace-evil-surround-keys)
+      ;; Avoid `embrace-add-pair' because it would overwrite the default
+      ;; rules, which we want for other modes
+      (push (cons (car pair) (make-embrace-pair-struct
+                              :key (car pair)
+                              :left (cadr pair)
+                              :right (cddr pair)
+                              :left-regexp (regexp-quote (cadr pair))
+                              :right-regexp (regexp-quote (cddr pair))))
+            embrace--pairs-list))
     (embrace-add-pair-regexp ?l "\\[a-z]+{" "}" #'+evil--embrace-latex))
 
   (defun +evil-embrace-lisp-mode-hook-h ()
@@ -356,7 +368,7 @@ directives. By default, this only recognizes C directives.")
         evil-snipe-repeat-scope 'visible
         evil-snipe-char-fold t)
   :config
-  (pushnew! evil-snipe-disabled-modes 'Info-mode 'calc-mode 'treemacs-mode))
+  (pushnew! evil-snipe-disabled-modes 'Info-mode 'calc-mode 'treemacs-mode 'dired-mode))
 
 
 (use-package! evil-surround
@@ -473,6 +485,7 @@ directives. By default, this only recognizes C directives.")
       :v  "gp"    #'+evil/alt-paste
       :nv "g@"    #'+evil:apply-macro
       :nv "gc"    #'evilnc-comment-operator
+      :nv "gO"    #'imenu
       :nv "gx"    #'evil-exchange
       :nv "gy"    #'+evil:yank-unindented
       :n  "g="    #'evil-numbers/inc-at-pt
@@ -493,6 +506,9 @@ directives. By default, this only recognizes C directives.")
        :v  "gR"  #'+eval:replace-region
        ;; Restore these keybinds, since the blacklisted/overwritten gr/gR will
        ;; undo them:
+       (:after helpful
+        :map helpful-mode-map
+        :n "gr" #'helpful-update)
        (:after compile
         :map (compilation-mode-map compilation-minor-mode-map)
         :n "gr" #'recompile)
